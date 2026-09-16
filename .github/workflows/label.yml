@@ -1,0 +1,49 @@
+# LABEL — plain British English for the estate, produced on the MSI runners and kept as a record:
+# describe.py gives every atlas line a note of what it does; label.py says what each app IS (engine, website, API,
+# calculator, dictionary, rules, reports, notes, just HTML). Runs on every push and on demand.
+name: label
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  label:
+    runs-on: [self-hosted, msi, gpu]
+    timeout-minutes: 20
+    env:
+      CPU_WORLD: C:\Users\vikra\Desktop\CPU WORLD
+    steps:
+      - name: Notes for every atlas line
+        shell: 'powershell -NoProfile -ExecutionPolicy Bypass -File {0}'
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          python pipeline\describe.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: What each app is
+        shell: 'powershell -NoProfile -ExecutionPolicy Bypass -File {0}'
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          python pipeline\label.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: No nonsense labels (every note and kind is a plain English phrase)
+        shell: 'powershell -NoProfile -ExecutionPolicy Bypass -File {0}'
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $d = Get-Content describe.json -Raw | ConvertFrom-Json
+          $bad = @($d.notes.PSObject.Properties | Where-Object { $_.Value -notmatch '^[a-z][a-z ,:;''\-]*( [A-Za-z0-9_]+)?$' -or $_.Value.Length -lt 6 })
+          $l = Get-Content labels.json -Raw | ConvertFrom-Json
+          $unk = @($l.labels.PSObject.Properties | Where-Object { $_.Value.kind -eq 'unknown' })
+          Write-Host ("notes " + $d.described + " · odd notes " + $bad.Count + " · apps " + $l.labels.PSObject.Properties.Count + " · unlabelled " + $unk.Count)
+          if ($bad.Count -gt 50) { Write-Error "too many odd notes"; exit 1 }
+      - name: Keep the records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: labels-${{ github.run_id }}
+          path: |
+            C:\Users\vikra\Desktop\CPU WORLD\describe.json
+            C:\Users\vikra\Desktop\CPU WORLD\labels.json
+          if-no-files-found: ignore

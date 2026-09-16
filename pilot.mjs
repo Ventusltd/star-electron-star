@@ -7,7 +7,7 @@
 const $ = id => document.getElementById(id);
 const here = new URL('.', location.href).href;
 const ENGINE_WEB = 'https://ventusltd.github.io/ventus-grid-engine/engine/';
-let apps = null, keysDb = null, qubit = null, entangle = null, serverMode = false; const born = { count: 0, seed: '2026-09-14' };
+let labels = null, apps = null, keysDb = null, qubit = null, entangle = null, serverMode = false; const born = { count: 0, seed: '2026-09-14' };
 const DIES = ['sld-sandbox', 'substation-intelligence', 'place-global-search', 'streaming-parquet-bridge'];
 
 // The Quantum Twin Star's own generator (testcode/202609142202/quantum.js), copied exactly so a measurement here reproduces one there.
@@ -27,7 +27,9 @@ const css = document.createElement('style'); css.textContent = `
 #saybar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} #saybar button{font:12px ui-monospace,Menlo,Consolas,monospace;background:#0e121b;color:#cfe3f2;border:1px solid #1b2030;border-radius:4px;width:24px;height:22px;cursor:pointer;padding:0}
 #saybar button:hover{border-color:#5ec8f2} #saybody{padding:.8rem 1.1rem;overflow:auto;flex:1}
 #saybody b{color:#5ec8f2} #say i{color:#f2b05e;font-style:normal} #say a{color:#5ec8f2} #saybody pre{max-height:38vh;overflow:auto;background:#11151f;border:1px solid #1b2030;border-radius:4px;padding:6px 8px;margin:6px 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre}
-#saybody pre em{color:#5b6377;font-style:normal} #saybody pre .hit{display:inline-block;width:100%;background:#1b2030;color:#f2b05e}
+#saybody pre em{color:#5b6377;font-style:normal} #saybody pre u{display:block;text-decoration:none;color:#5b6377;font-size:11px;padding-left:4.2em;margin:0 0 2px}
+#saybody pre .hit u{color:#8b93a7}
+#saybody pre .hit{display:inline-block;width:100%;background:#1b2030;color:#f2b05e}
 #saybody a.dev{float:right;font-size:11px;color:#5b6377}
 #say code{display:block;background:#11151f;border:1px solid #1b2030;border-radius:4px;padding:2px 6px;color:#cfe3f2;margin:4px 0}
 #eg{position:fixed;right:12px;bottom:58px;background:#0e121bf2;border:1px solid #1b2030;border-radius:8px;padding:.5rem .7rem;display:flex;flex-direction:column;gap:4px;max-width:46vw;z-index:20}
@@ -35,6 +37,12 @@ const css = document.createElement('style'); css.textContent = `
 #eg select{font:12px ui-monospace,Menlo,Consolas,monospace;background:#11151f;color:#cfe3f2;border:1px solid #1b2030;border-radius:6px;padding:.45rem .7rem}
 #plog{position:fixed;left:12px;bottom:58px;max-height:30vh;overflow:hidden;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#8b93a7;white-space:pre;pointer-events:none;z-index:19}
 #beam{bottom:58px !important}
+#earth{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;background:#0b0e15}
+#earth.open{display:flex}
+#earthbar{display:flex;align-items:center;gap:10px;padding:6px 12px;background:#11151f;border-bottom:1px solid #1b2030;font:12px ui-monospace,Menlo,Consolas,monospace;color:#cfe3f2}
+#earthbar b{color:#f2b05e;letter-spacing:.08em} #earthbar span{flex:1;color:#8b93a7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#earthbar button,#earthbar a{font:12px ui-monospace,Menlo,Consolas,monospace;background:#0e121b;color:#5ec8f2;border:1px solid #1b2030;border-radius:6px;padding:.4rem .8rem;cursor:pointer;text-decoration:none}
+#earthframe{flex:1;border:0;width:100%;background:#000}
 `; document.head.appendChild(css);
 document.body.insertAdjacentHTML('beforeend', `
 <div id="say"></div><div id="plog"></div>
@@ -46,12 +54,16 @@ document.body.insertAdjacentHTML('beforeend', `
 <option value="measure 39885">Measure block 39885: one recorded draw, HOME or AWAY</option>
 <option value="connect 39885 1217">Connect two lines with the beam</option>
 <option value="app gridatlas">Go to GridAtlas</option>
+<option value="land gridatlas">Land on GridAtlas: the live app, inside this page</option>
+<option value="land pipelinenews">Land on Pipeline News</option>
+<option value="space">Back to space: the wafer</option>
 <option value="apps">List every app on the wafer</option>
 <option value="run voltage-drop.voltageDropVolts {&quot;currentA&quot;:120,&quot;lengthM&quot;:250,&quot;resistanceOhmPerKm&quot;:0.32,&quot;powerFactor&quot;:0.95,&quot;phases&quot;:&quot;three&quot;}">Engine: voltage drop, 120 A over 250 m, 0.32 Ω/km, pf 0.95</option>
 <option value="entangle">Check: how many blocks are found at their recorded line</option>
 <option value="help">Help</option></select></div>
 <form id="pilot"><input id="pin" autocomplete="off" autofocus placeholder="type a sentence or a command: block 39885 · twin 39885 · state 39885 · measure 39885 · app gridatlas · run voltage-drop… · help"></form>`);
 
+const EARTH_HTML = '<div id="earth"><div id="earthbar"><b>EARTH</b><span id="earthname"></span><a id="earthtab" target="_blank">open in its own tab</a><button id="earthback">back to space</button></div><iframe id="earthframe" title="the live app"></iframe></div>';
 const lines = []; const log = s => { lines.push(s); if (lines.length > 12) lines.shift(); $('plog').textContent = lines.join('\n'); };
 // the card is a small window: minimise, maximise, resize (drag the corner), close; any new answer reopens it
 const sayEl = $('say'); sayEl.innerHTML = '<div id="saybar"><span id="saytitle">card</span><button id="saymin" title="minimise">–</button><button id="saymax" title="maximise">▢</button><button id="sayclose" title="close">×</button></div><div id="saybody"></div>';
@@ -67,8 +79,31 @@ const fly = (a, b) => { $('a').value = String(a); $('b').value = b ? String(b) :
 const gh = t => `https://github.com/${t.repo}/blob/${t.commit}/${t.path}#L${t.line}`;
 const signal = o => { if (serverMode) fetch('/signal', { method: 'POST', body: JSON.stringify(o) }).catch(() => {}); try { const L = JSON.parse(localStorage.getItem('qt-signals') || '[]'); L.push({ ...o, t: new Date().toISOString() }); localStorage.setItem('qt-signals', JSON.stringify(L.slice(-500))); } catch {} };
 
+
+// ---------- plain English: engine calls get a label; every line in the code view gets a note (same rules as pipeline/describe.py) ----------
+const PLAIN = {
+  'voltage-drop.voltageDropVolts': a => `voltage drop for ${a.currentA} A over ${a.lengthM} m at ${a.resistanceOhmPerKm} Ω/km${a.reactanceOhmPerKm ? ' (reactance ' + a.reactanceOhmPerKm + ')' : ''}, power factor ${a.powerFactor}, ${a.phases || 'three'}-phase`,
+  'voltage-drop.dropPercent': a => `${a.dropVolts} V drop as a share of ${a.nominalVolts} V`, 'voltage-drop.lossesWatts': a => `heat lost in the cable: ${a.currentA} A over ${a.lengthM} m at ${a.resistanceOhmPerKm} Ω/km`,
+  'diversified-demand.diversifiedDemandKw': a => `demand of ${a.unitCount} units at ${a.perUnitKw} kW each, coincidence ${a.coincidenceFactor}`,
+  'current-from-power.currentA': a => `current for ${a.apparentPowerVa} VA at ${a.voltageV} V, ${a.phases || 'three'}-phase`, 'firm-capacity.apparentPowerMva': a => `apparent power for ${a.mw} MW at power factor ${a.powerFactor}`,
+  'power-factor.reactivePowerKvar': a => `reactive power for ${a.kw} kW at power factor ${a.powerFactor}`,
+};
+const plainLabel = (mod, fn, args) => { const f = PLAIN[`${mod}.${fn}`]; try { return f ? f(args) : `${mod.replace(/-/g, ' ')}: ${fn.replace(/([A-Z])/g, ' $1').toLowerCase()}`; } catch { return `${mod}.${fn}`; } };
+const DESCRIBE_RULES = [
+  [/^\s*$/, 'blank line'], [/^\s*\/\//, 'a comment'], [/^\s*\/\*|^\s*\*/, 'a comment block'],
+  [/^\s*(import|export)\b/, 'brings code in or out of this file'], [/^\s*(?:async\s+)?function\s+(\w+)/, 'defines the function $1'],
+  [/^\s*(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(?[^=]*=>/, 'defines the function $1'], [/^\s*(?:const|let|var)\s+(\w+)\s*=/, 'sets $1'],
+  [/\.addEventListener\(\s*['"](\w+)/, 'listens for a $1 on the page'], [/^\s*return\b/, 'hands a result back'], [/^\s*if\b/, 'decides: only when the condition holds'],
+  [/^\s*(?:else|\} else)/, 'otherwise'], [/^\s*for\b|^\s*while\b/, 'repeats for each item'], [/^\s*try\b/, 'tries, ready to catch a failure'], [/^\s*catch\b|\} catch/, 'handles a failure'],
+  [/\.(?:querySelector|getElementById)\(/, 'finds a part of the page'], [/\.innerHTML\s*=|\.textContent\s*=/, 'writes text onto the page'], [/\bfetch\(/, 'asks a server for data'],
+  [/\bclassList\./, 'changes how a part of the page looks'], [/\bconsole\./, 'writes to the developer console'], [/\bthrow\b/, 'stops with an error'],
+  [/^\s*\}\s*\)?;?\s*$|^\s*\]\s*;?\s*$/, 'closes a block'], [/^\s*(\w+)\s*\(.*\)\s*;?\s*$/, 'calls $1'], [/\bawait\b/, 'waits for a result'], [/=/, 'sets a value'],
+];
+const describeLine = line => { for (const [re, note] of DESCRIBE_RULES) { const m = line.match(re); if (m) return note.replace(/\$(\d)/g, (_, i) => m[+i] || ''); } return 'a line of code'; };
+window.__describe = describeLine;
+
 const cmds = {
-  help(){ say(`<b>commands</b>\nblock &lt;key&gt; · twin &lt;key&gt; · read &lt;key&gt; · state &lt;key&gt; · measure &lt;key&gt; [seed] · connect &lt;a&gt; &lt;b&gt; · app &lt;name&gt; · apps · engine · run &lt;module&gt;.&lt;fn&gt; {…} · entangle · reset\nor a sentence: "fly to 39885", "show me gridatlas", "voltage drop for 120 A over 250 m at 0.32 ohm pf 0.95"\n\nEach dot has a permanent key and stands for one real line of code. Moving dots never changes keys.`); },
+  help(){ say(`<b>commands</b>\nblock &lt;key&gt; · twin &lt;key&gt; · read &lt;key&gt; · state &lt;key&gt; · measure &lt;key&gt; [seed] · connect &lt;a&gt; &lt;b&gt; · land &lt;app&gt; · space · app &lt;name&gt; · apps · engine · run &lt;module&gt;.&lt;fn&gt; {…} · entangle · reset\nor a sentence: "fly to 39885", "show me gridatlas", "voltage drop for 120 A over 250 m at 0.32 ohm pf 0.95"\n\nEach dot has a permanent key and stands for one real line of code. Moving dots never changes keys.`); },
   block(k){ k = parseInt(k, 10); if (!Number.isFinite(k)) return log('block <key>'); fly(k); say(`<b>block ${k}</b>\nthe beam is on line ${k}; the panel on the left shows what it is.\n<i>next:</i> twin ${k}`); log(`block ${k}`); },
   fly(k){ return cmds.block(k); }, goto(k){ return cmds.block(k); },
   async twin(k){ k = parseInt(k, 10); const t = twinOf(k); if (!t) return log(`twin ${k}: this block has no recorded line`); fly(k); return cmds.showCode(k, t, 'twin'); },
@@ -82,7 +117,7 @@ const cmds = {
 could not load the file here.
 <a target="_blank" href="${gh(t)}">source, for developers</a>`); return log(`${verb} ${k}: file not loaded; source link shown`); }
     const from = Math.max(1, t.line - 20), to = Math.min(lines.length, t.line + 20); const rows = [];
-    for (let n = from; n <= to; n++) rows.push(`<span class="${n === t.line ? 'hit' : ''}"><em>${String(n).padStart(5)}</em> ${esc(lines[n - 1] ?? '')}</span>`);
+    for (let n = from; n <= to; n++) rows.push(`<span class="${n === t.line ? 'hit' : ''}"><em>${String(n).padStart(5)}</em> ${esc(lines[n - 1] ?? '')}<u>${esc(describeLine(lines[n - 1] ?? ''))}</u></span>`);
     say(`${head}
 <pre id="code">${rows.join('\n')}</pre><i>next:</i> state ${k}   <a class="dev" target="_blank" href="${gh(t)}">source, for developers</a>`);
     const hit = document.querySelector('#code .hit'); if (hit) hit.scrollIntoView({ block: 'center' }); log(`${verb} ${k}: ${t.path.split('/').pop()} line ${t.line}: ${(lines[t.line - 1] || '').trim().slice(0, 60)}`); },
@@ -95,17 +130,17 @@ could not load the file here.
     say(`<b>measure ${k}</b> — result: <b>${outcome}</b>\n${esc(audit)}\nThe same seed, block and count always give the same result. Type <i>state ${k}</i> to see the probabilities again.`); log(audit);
     signal({ kind: 'born', key: k, family: a.fid, seed: born.seed, count: born.count, r, p_away: pAway, outcome: away ? 'AWAY' : 'HOME', shells: { K: a.K, L: a.L, M: a.M } }); },
   connect(ab){ const [a, b] = (ab || '').split(/\s+/).map(x => parseInt(x, 10)); if (!Number.isFinite(a) || !Number.isFinite(b)) return log('connect <a> <b>'); fly(a, b); say(`<b>connect ${a} → ${b}</b>\nthe beam joins two keys; both twins are real lines.`); log(`connect ${a} ${b}`); },
-  apps(){ if (!apps) return log('apps not loaded'); const list = apps.apps.filter(a => a.app); say(`<b>${list.length} apps</b> (${esc(apps.rule)})\n` + list.map((a, i) => `${i + 1}. ${a.name}: ${a.keys.toLocaleString()} blocks · ${a.families} gates`).join('\n') + `\n<i>next:</i> app &lt;name&gt;`); log(`${list.length} apps`); },
+  apps(){ if (!apps) return log('apps not loaded'); const list = apps.apps.filter(a => a.app); say(`<b>${list.length} apps</b> (${esc(apps.rule)})\n` + list.map((a, i) => { const L = labels && labels.labels[a.name]; return `${i + 1}. ${a.name} — ${L ? labels.kinds[L.kind] + ': ' + L.what : ''} · ${a.keys.toLocaleString()} blocks`; }).join('\n') + `\n<i>next:</i> app &lt;name&gt;`); log(`${list.length} apps`); },
   app(name){ if (!apps) return log('apps not loaded'); const list = apps.apps.filter(a => a.app); const a = list.find(x => x.name === (name || '').toLowerCase()) || list.find(x => x.name.includes((name || '').toLowerCase())); if (!a) return log(`no app "${name}"`);
     const [k0, k1] = apps.first[a.repo]; fly(k0, k1); const url = a.name === 'globalgrid2050' ? 'https://globalgrid2050.com/' : `https://ventusltd.github.io/${a.name}/`;
-    say(`<b>app ${esc(a.name)}</b> — ${a.keys.toLocaleString()} blocks in ${a.families} gates · index ${esc(a.index || '?')}\nthe beam spans its first and middle lines (${k0} → ${k1}).\n<a target="_blank" href="${url}">open ${esc(a.name)} — see the code in action</a>  ·  <a target="_blank" href="https://github.com/${esc(a.repo)}">source</a>`); log(`app ${a.name}`); },
+    say(`<b>app ${esc(a.name)}</b> — ${(() => { const L = labels && labels.labels[a.name]; return L ? esc(labels.kinds[L.kind] + '. ' + L.what) : ''; })()}\n${a.keys.toLocaleString()} blocks in ${a.families} gates · index ${esc(a.index || '?')}\nthe beam spans its first and middle lines (${k0} → ${k1}).\n<a target="_blank" href="${url}">open ${esc(a.name)} — see the code in action</a>  ·  <a target="_blank" href="https://github.com/${esc(a.repo)}">source</a>`); log(`app ${a.name}`); },
   async engine(){ const mods = ['voltage-drop', 'diversified-demand', 'current-from-power', 'firm-capacity', 'power-factor', 'connection-capacity']; const out = []; for (const m of mods) { try { const mod = await import(ENGINE_WEB + m + '.js'); out.push(`${m}: ${Object.keys(mod).filter(k => typeof mod[k] === 'function').join(', ')}`); } catch (e) { out.push(`${m}: (not reachable: ${e.message})`); } }
     say(`<b>engine</b> — ventus-grid-engine, imported live from its published modules\n${esc(out.join('\n'))}\n<i>next:</i> run voltage-drop.voltageDropVolts {…}`); log('engine listed'); },
   async run(rest){ const m = /^([a-z0-9-]+)\.([A-Za-z0-9_]+)\s*(\{[\s\S]*\})?$/.exec((rest || '').trim()); if (!m) return log('run <module>.<fn> {…}'); let args = {}; try { args = m[3] ? JSON.parse(m[3]) : {}; } catch { return log('run: arguments are not valid JSON'); }
     let result, err, us = 0; try { const mod = await import(ENGINE_WEB + m[1] + '.js'); if (typeof mod[m[2]] !== 'function') throw new Error(`no function ${m[2]} in ${m[1]}; has ${Object.keys(mod).filter(k => typeof mod[k] === 'function').join(', ')}`); const t0 = performance.now(); result = mod[m[2]](args); us = (performance.now() - t0) * 1000; } catch (e) { err = e.message; }
     if (err) { say(`<b>engine ${esc(m[1])}.${esc(m[2])}</b>\n<code>refused: ${esc(err)}</code>`); return log(`run refused: ${err}`); }
     const big = (result?.unit && /^(kW|kVA)$/.test(result.unit) && result.value > 100) || (result?.unit && /^(MW|MVA)$/.test(result.unit) && result.value > 0.1) || Object.entries(args).some(([k, v]) => (/mw|mva/i.test(k) && v * 1000 > 100) || (/kw|kva/i.test(k) && v > 100));
-    say(`<b>engine ${esc(m[1])}.${esc(m[2])}</b> · ${us.toFixed(0)} µs · imported from ventusltd.github.io/ventus-grid-engine\nin <code>${esc(JSON.stringify(args))}</code>out <code>${esc(JSON.stringify(result, null, 1))}</code>${big ? '<i>above 100 kW: a chartered electrical engineer must sign any real design.</i>\n' : ''}This page shows figures; it is not the engineer.`); log(`run ${m[1]}.${m[2]} → ${JSON.stringify(result).slice(0, 80)}`); signal({ kind: 'engine', module: m[1], fn: m[2], args, result }); },
+    say(`<b>${esc(plainLabel(m[1], m[2], args))}</b>\nengine ${esc(m[1])}.${esc(m[2])} · ${us.toFixed(0)} µs · imported from ventusltd.github.io/ventus-grid-engine\nin <code>${esc(JSON.stringify(args))}</code>out <code>${esc(JSON.stringify(result, null, 1))}</code>${big ? '<i>above 100 kW: a chartered electrical engineer must sign any real design.</i>\n' : ''}This page shows figures; it is not the engineer.`); log(`${plainLabel(m[1], m[2], args)} → ${JSON.stringify(result).slice(0, 80)}`); signal({ kind: 'engine', module: m[1], fn: m[2], args, result }); },
   entangle(){ if (!entangle) return log('entangle not loaded'); say(`<b>entangle</b> (${esc(entangle.generated_utc)})\n${entangle.resolved.toLocaleString()} of ${entangle.keys.toLocaleString()} blocks reach their twin line (${(entangle.rate * 100).toFixed(2)} %) · ${entangle.broken.toLocaleString()} broken\nmeasured by fetching every twin from its commit and hashing the line (pipeline/entangle.py)\n${esc(JSON.stringify(entangle.reasons))}`); log(`entangle ${(entangle.rate * 100).toFixed(2)} %`); },
   reset(){ $('a').value = ''; $('b').value = ''; $('panel').hidden = true; say(''); log('reset'); }, home(){ return cmds.reset(); },
   die(w){ return log('die: available in CPU WORLD (needs route-gridatlas.json)'); }, light(w){ return cmds.app('gridatlas'); },
@@ -117,12 +152,25 @@ async function run(line){ const [c, ...rest] = line.trim().split(/\s+/); const w
 $('pilot').onsubmit = e => { e.preventDefault(); const v = $('pin').value; $('pin').value = ''; if (v.trim()) run(v); };
 $('egs').onchange = e => { if (e.target.value) { if (e.target.value === $('pin').dataset.last && lastCard && !sayEl.classList.contains('open')) { say(lastCard); log('card reopened'); } else { $('pin').value = e.target.value; $('pin').dataset.last = e.target.value; log('example loaded — press Enter to run it'); $('pin').focus(); } } e.target.selectedIndex = 0; };
 addEventListener('keydown', e => { const t = e.target.tagName; if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || t === 'BUTTON') return; if (e.key.length === 1) $('pin').focus(); });
+
+// ---------- space <-> earth: the live apps, by name, inside the page ----------
+const EARTH = { gridatlas: 'https://ventusltd.github.io/gridatlas/atlas/', pipelinenews: 'https://ventusltd.github.io/pipelinenews/', globalgrid2050: 'https://globalgrid2050.com/', 'grid-dictionary': 'https://ventusltd.github.io/grid-dictionary/', spiders: 'https://ventusltd.github.io/spiders/', 'star-solar-star': 'https://ventusltd.github.io/star-solar-star/', 'code-generator': 'https://ventusltd.github.io/code-generator/', testcode: 'https://ventusltd.github.io/testcode/', 'galaxies-wafers': 'https://ventusltd.github.io/galaxies-wafers/', 'ventus-grid-engine': 'https://ventusltd.github.io/ventus-grid-engine/', stars: 'https://ventusltd.github.io/stars/' };
+document.body.insertAdjacentHTML('beforeend', EARTH_HTML);
+const earthUrl = name => EARTH[name] || (apps && apps.apps.find(a => a.app && a.name === name) ? `https://ventusltd.github.io/${name}/` : null);
+cmds.land = function(name){ name = (name || '').toLowerCase().trim(); const key = Object.keys(EARTH).find(k => k === name) || Object.keys(EARTH).find(k => k.includes(name)) || (apps ? (apps.apps.find(a => a.app && a.name.includes(name)) || {}).name : null);
+  const url = key ? earthUrl(key) : null; if (!url) return log(`land <app>: ${Object.keys(EARTH).join(', ')}`);
+  $('earthname').textContent = `${key} · ${url}`; $('earthtab').href = url; $('earthframe').src = url; $('earth').classList.add('open'); say(''); log(`landed on ${key} — type space to come back`); };
+cmds.visit = cmds.land; cmds.go = cmds.land; cmds.open = cmds.land;
+cmds.space = function(){ $('earth').classList.remove('open'); $('earthframe').src = 'about:blank'; log('back in space: the wafer'); };
+$('earthback').onclick = () => cmds.space();
+window.__earth = () => ({ open: $('earth').classList.contains('open'), name: $('earthname').textContent, src: $('earthframe').src });
+
 window.__pilot = run;
 (async () => {
   serverMode = await fetch('/gpu', { cache: 'no-store' }).then(r => r.ok).catch(() => false);
   if (serverMode) (async function poll(){ try { const { lines: L } = await (await fetch('/pilot/next')).json(); for (const l of L) { log(`[powershell] ${l}`); await run(l); } } catch {} setTimeout(poll, 500); })();
   const j = async f => fetch(here + f).then(r => r.ok ? r.json() : null).catch(() => null);
-  [keysDb, qubit, apps, entangle] = await Promise.all([j('keys.json'), j('qubit.json'), j('apps.json'), j('entangle.json')]);
+  [keysDb, qubit, apps, entangle, labels] = await Promise.all([j('keys.json'), j('qubit.json'), j('apps.json'), j('entangle.json'), j('labels.json')]);
   log(`Quantum Twin — primary key to actual code. ${keysDb ? keysDb.count.toLocaleString() : '?'} blocks with a recorded line; ${qubit ? Object.keys(qubit.atoms).length.toLocaleString() : '?'} block families.`);
   log('Type a sentence or a command. Every answer shows the command it became. Try: block 39885');
 })();
