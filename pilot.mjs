@@ -20,10 +20,15 @@ const css = document.createElement('style'); css.textContent = `
 #pilot{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;padding:8px 12px;background:#0e121bf2;border-top:1px solid #1b2030;z-index:20}
 #pilot input{flex:1;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#11151f;color:#cfe3f2;border:1px solid #1b2030;border-radius:6px;padding:.6rem .9rem}
 #pilot input:focus{outline:1px solid #5ec8f2}
-#say{position:fixed;left:50%;top:12vh;transform:translateX(-50%);max-width:min(64ch,84vw);background:#0e121bf2;border:1px solid #1b2030;border-radius:8px;padding:.8rem 1.1rem;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#cfe3f2;display:none;z-index:20;white-space:pre-wrap}
-#say b{color:#5ec8f2} #say i{color:#f2b05e;font-style:normal} #say a{color:#5ec8f2} #say pre{max-height:38vh;overflow:auto;background:#11151f;border:1px solid #1b2030;border-radius:4px;padding:6px 8px;margin:6px 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre}
-#say pre em{color:#5b6377;font-style:normal} #say pre .hit{display:inline-block;width:100%;background:#1b2030;color:#f2b05e}
-#say a.dev{float:right;font-size:11px;color:#5b6377}
+#say{position:fixed;left:50%;top:12vh;transform:translateX(-50%);width:min(72ch,84vw);max-height:70vh;min-width:280px;min-height:64px;background:#0e121bf2;border:1px solid #1b2030;border-radius:8px;padding:0;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#cfe3f2;display:none;z-index:20;white-space:pre-wrap;resize:both;overflow:hidden;display:none;flex-direction:column}
+#say.open{display:flex} #say.max{left:12px;top:12px;right:12px;bottom:60px;transform:none;width:auto;max-height:none;height:auto}
+#say.min{height:auto!important;max-height:none;resize:none;width:min(48ch,84vw)} #say.min #saybody{display:none}
+#saybar{display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid #1b2030;background:#11151f;cursor:move;user-select:none;font-size:11px;color:#8b93a7;letter-spacing:.06em;text-transform:uppercase}
+#saybar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} #saybar button{font:12px ui-monospace,Menlo,Consolas,monospace;background:#0e121b;color:#cfe3f2;border:1px solid #1b2030;border-radius:4px;width:24px;height:22px;cursor:pointer;padding:0}
+#saybar button:hover{border-color:#5ec8f2} #saybody{padding:.8rem 1.1rem;overflow:auto;flex:1}
+#saybody b{color:#5ec8f2} #say i{color:#f2b05e;font-style:normal} #say a{color:#5ec8f2} #saybody pre{max-height:38vh;overflow:auto;background:#11151f;border:1px solid #1b2030;border-radius:4px;padding:6px 8px;margin:6px 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre}
+#saybody pre em{color:#5b6377;font-style:normal} #saybody pre .hit{display:inline-block;width:100%;background:#1b2030;color:#f2b05e}
+#saybody a.dev{float:right;font-size:11px;color:#5b6377}
 #say code{display:block;background:#11151f;border:1px solid #1b2030;border-radius:4px;padding:2px 6px;color:#cfe3f2;margin:4px 0}
 #eg{position:fixed;right:12px;bottom:58px;background:#0e121bf2;border:1px solid #1b2030;border-radius:8px;padding:.5rem .7rem;display:flex;flex-direction:column;gap:4px;max-width:46vw;z-index:20}
 #eg label{font:11px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;color:#8b93a7}
@@ -48,7 +53,15 @@ document.body.insertAdjacentHTML('beforeend', `
 <form id="pilot"><input id="pin" autocomplete="off" autofocus placeholder="type a sentence or a command: block 39885 · twin 39885 · state 39885 · measure 39885 · app gridatlas · run voltage-drop… · help"></form>`);
 
 const lines = []; const log = s => { lines.push(s); if (lines.length > 12) lines.shift(); $('plog').textContent = lines.join('\n'); };
-const say = html => { const el = $('say'); if (!html) { el.style.display = 'none'; return; } el.innerHTML = html; el.style.display = 'block'; };
+// the card is a small window: minimise, maximise, resize (drag the corner), close; any new answer reopens it
+const sayEl = $('say'); sayEl.innerHTML = '<div id="saybar"><span id="saytitle">card</span><button id="saymin" title="minimise">–</button><button id="saymax" title="maximise">▢</button><button id="sayclose" title="close">×</button></div><div id="saybody"></div>';
+let lastCard = '';
+const say = html => { if (!html) { sayEl.classList.remove('open'); return; } lastCard = html; $('saybody').innerHTML = html; const t = $('saybody').querySelector('b'); $('saytitle').textContent = t ? t.textContent : 'card'; sayEl.classList.remove('min'); sayEl.classList.add('open'); };
+$('saymin').onclick = e => { e.stopPropagation(); sayEl.classList.toggle('min'); }; $('saymax').onclick = e => { e.stopPropagation(); sayEl.classList.remove('min'); sayEl.classList.toggle('max'); }; $('sayclose').onclick = e => { e.stopPropagation(); sayEl.classList.remove('open', 'max', 'min'); };
+$('saybar').ondblclick = () => sayEl.classList.toggle('min');
+(() => { let d = null; $('saybar').addEventListener('pointerdown', e => { if (e.target.tagName === 'BUTTON' || sayEl.classList.contains('max')) return; const r = sayEl.getBoundingClientRect(); d = { x: e.clientX - r.left, y: e.clientY - r.top }; sayEl.style.transform = 'none'; sayEl.style.left = r.left + 'px'; sayEl.style.top = r.top + 'px'; $('saybar').setPointerCapture(e.pointerId); });
+  $('saybar').addEventListener('pointermove', e => { if (!d) return; sayEl.style.left = Math.max(0, e.clientX - d.x) + 'px'; sayEl.style.top = Math.max(0, e.clientY - d.y) + 'px'; }); $('saybar').addEventListener('pointerup', () => { d = null; }); $('saybar').addEventListener('pointercancel', () => { d = null; }); })();
+window.__card = () => ({ open: sayEl.classList.contains('open'), min: sayEl.classList.contains('min'), max: sayEl.classList.contains('max'), w: sayEl.offsetWidth, h: sayEl.offsetHeight, title: $('saytitle').textContent });
 const esc = s => String(s).replace(/</g, '&lt;');
 const fly = (a, b) => { $('a').value = String(a); $('b').value = b ? String(b) : ''; $('beam').requestSubmit(); };
 const gh = t => `https://github.com/${t.repo}/blob/${t.commit}/${t.path}#L${t.line}`;
@@ -102,7 +115,7 @@ async function run(line){ const [c, ...rest] = line.trim().split(/\s+/); const w
     for (const c2 of p.commands) { const [w2, ...r2] = c2.split(/\s+/); if (Object.hasOwn(cmds, w2)) { try { await cmds[w2](r2.join(' ')); } catch (e) { log('error: ' + e.message); } } } signal({ kind: 'pilot', sentence: line, plan: p.commands }); return; }
   log(`> ${line}`); try { await fn(rest.join(' ')); } catch (e) { log('error: ' + e.message); } }
 $('pilot').onsubmit = e => { e.preventDefault(); const v = $('pin').value; $('pin').value = ''; if (v.trim()) run(v); };
-$('egs').onchange = e => { if (e.target.value) { $('pin').value = e.target.value; log('example loaded — press Enter to run it'); $('pin').focus(); } e.target.selectedIndex = 0; };
+$('egs').onchange = e => { if (e.target.value) { if (e.target.value === $('pin').dataset.last && lastCard && !sayEl.classList.contains('open')) { say(lastCard); log('card reopened'); } else { $('pin').value = e.target.value; $('pin').dataset.last = e.target.value; log('example loaded — press Enter to run it'); $('pin').focus(); } } e.target.selectedIndex = 0; };
 addEventListener('keydown', e => { const t = e.target.tagName; if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || t === 'BUTTON') return; if (e.key.length === 1) $('pin').focus(); });
 window.__pilot = run;
 (async () => {
