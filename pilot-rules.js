@@ -8,7 +8,7 @@ function plan(sentence, ctx) {
   const dieHit = t.includes('substation') ? 'substation' : t.includes('sld') ? 'sld-sandbox' : /\bsearch\b/.test(t) ? 'search' : /(bridge|parquet)/.test(t) ? 'bridge' : DIES.find(d => t.includes(d.split('-')[0])) || null;
   const wantArrange = /(arrange|re-?arrange|layout|lay out|as a cpu|floorplan|floor plan|\brings?\b|\bgrid\b|sector|by app)/.test(t);
 
-  const earthNames = ['gridatlas', 'pipelinenews', 'pipeline news', 'globalgrid2050', 'grid-dictionary', 'spiders', 'star-solar-star', 'code-generator', 'testcode', 'galaxies-wafers', 'ventus-grid-engine', 'stars'];
+  const earthNames = ['spider sandbox', 'periodic table', 'gridatlas', 'pipelinenews', 'pipeline news', 'globalgrid2050', 'grid-dictionary', 'spiders', 'star-solar-star', 'code-generator', 'testcode', 'galaxies-wafers', 'ventus-grid-engine', 'stars'];
   if (/\b(back to space|to space|space)\b/.test(t) && !/\bland\b/.test(t)) return { commands: ['space'], because: 'back to the wafer' };
   if (/\b(land|land on|take me to|go down to|visit|open|show me the app)\b/.test(t)) { const e = earthNames.find(n => t.includes(n)); if (e) return { commands: [`land ${e.replace('pipeline news', 'pipelinenews')}`], because: 'down to the live app' }; }
   if (/\bplasma\b/.test(t)) out.push('plasma');
