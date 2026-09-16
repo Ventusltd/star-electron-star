@@ -1,0 +1,90 @@
+# SWARM — drive the MSI runners hard, within limits. Twenty jobs at once, each: GPU temperature guard,
+# the sixty machine checks, the key-to-code check. Runs on every push to main and on demand.
+# Only self-hosted runners labelled msi + gpu take these jobs; nothing here runs on GitHub's machines.
+name: swarm
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      lanes: { description: "how many parallel lanes (1-20)", required: false, default: "20" }
+concurrency: swarm-${{ github.ref }}
+jobs:
+  lane:
+    runs-on: [self-hosted, msi, gpu]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        lane: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    env:
+      CPU_WORLD: C:\Users\vikra\Desktop\CPU WORLD
+      LANE: ${{ matrix.lane }}
+    steps:
+      - name: Temperature guard (GPU under 80 C, otherwise refuse the lane)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $t = [int](& nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits)
+          Write-Host "lane $env:LANE gpu ${t}C"
+          if ($t -ge 80) { Write-Error "GPU at ${t}C: lane refused"; exit 1 }
+      - name: Console is up
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $g = Invoke-RestMethod http://127.0.0.1:8791/gpu
+          if (-not $g.name) { Write-Error "console not running: start node serve.mjs in CPU WORLD"; exit 1 }
+      - name: The sixty machine checks
+        shell: powershell
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          node pipeline\hundred.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Key-to-code check (every recorded line fetched from its commit)
+        if: matrix.lane <= 4
+        shell: powershell
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          python pipeline\entangle.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Engine storm (200 calls, refusals expected on bad inputs)
+        shell: powershell
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ok = 0; $refused = 0; $bad = 0
+          for ($i = 0; $i -lt 200; $i++) {
+            $pf = if ($i % 4 -eq 3) { 1.5 } else { 0.95 }
+            $body = @{ module = "voltage-drop"; fn = "voltageDropVolts"; args = @{ currentA = 100 + $i; lengthM = 250; resistanceOhmPerKm = 0.32; powerFactor = $pf; phases = "three" } } | ConvertTo-Json -Compress
+            try { $r = Invoke-RestMethod -Method Post http://127.0.0.1:8791/engine/run -ContentType application/json -Body $body; if ($r.result.value -gt 0) { $ok++ } else { $bad++ } }
+            catch { if ($pf -eq 1.5) { $refused++ } else { $bad++ } }
+          }
+          Write-Host "lane $env:LANE engine: ok $ok refused $refused bad $bad"
+          if ($bad -gt 0 -or $refused -ne 50) { Write-Error "engine storm: $bad wrong answers, $refused refusals (expected 50)"; exit 1 }
+      - name: Temperature after
+        if: always()
+        shell: powershell
+        run: nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,memory.used --format=csv,noheader
+  users:
+    runs-on: [self-hosted, msi, gpu]
+    timeout-minutes: 20
+    env:
+      CPU_WORLD: C:\Users\vikra\Desktop\CPU WORLD
+    steps:
+      - name: Fifty user actions in a real Chrome on the live page
+        shell: powershell
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          node pipeline\users.mjs https://ventusltd.github.io/star-electron-star/
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Keep the screenshots and the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: users-${{ github.run_id }}
+          path: C:\Users\vikra\Desktop\CPU WORLD\probe\USERS-*
+          if-no-files-found: ignore

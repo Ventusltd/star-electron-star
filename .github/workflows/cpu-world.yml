@@ -1,0 +1,61 @@
+# CPU WORLD step runner — runs ONLY on the MSI's self-hosted runners (real GPU, logged-in session).
+# Goes into <repo>/.github/workflows/cpu-world.yml when Vikram says "push".
+# Inputs reach the shell ONLY through environment variables (never interpolated into the script),
+# and the step name is whitelisted by the switch. The harness may choose args; it cannot choose code.
+name: cpu-world
+on:
+  workflow_dispatch:
+    inputs:
+      step: { description: "route | keys | routes | engine-route | entangle | probe | review", required: true, default: "probe" }
+      arg:  { description: "probe: pilot command · review: <file> <preset>", required: false, default: "light atlas" }
+concurrency: cpu-world-${{ github.run_id }}
+jobs:
+  step:
+    runs-on: [self-hosted, msi, gpu]
+    timeout-minutes: 30
+    env:
+      CPU_WORLD: C:\Users\vikra\Desktop\CPU WORLD
+      STEP: ${{ inputs.step }}
+      ARG: ${{ inputs.arg }}
+    steps:
+      - name: Console is up
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $g = Invoke-RestMethod http://127.0.0.1:8791/gpu
+          if (-not $g.name) { Write-Error "console answered but nvidia-smi gave nothing"; exit 1 }
+          $g | ConvertTo-Json -Compress
+      - name: Ollama is up
+        if: env.STEP == 'review'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          (Invoke-RestMethod http://127.0.0.1:11434/api/tags).models.name
+      - name: Run step
+        shell: powershell
+        working-directory: ${{ env.CPU_WORLD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:ARG -notmatch '^[A-Za-z0-9 ._:{}"\[\],-]*$') { Write-Error "arg contains characters that are not allowed"; exit 1 }
+          switch ($env:STEP) {
+            "route"        { python pipeline\route.py }
+            "keys"         { python pipeline\keys.py }
+            "routes"       { python pipeline\routes.py }
+            "engine-route" { python pipeline\engine-route.py }
+            "entangle"     { python pipeline\entangle.py }
+            "probe"        { node pipeline\probe.mjs $env:ARG }
+            "review"       { node pipeline\review.mjs $env:ARG }
+            default        { Write-Error "unknown step '$env:STEP'"; exit 1 }
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-world-${{ env.STEP }}-${{ github.run_id }}
+          path: |
+            ${{ env.CPU_WORLD }}\probe\*
+            ${{ env.CPU_WORLD }}\reviews\*
+            ${{ env.CPU_WORLD }}\route-gridatlas.json
+            ${{ env.CPU_WORLD }}\entangle.json
+          if-no-files-found: ignore

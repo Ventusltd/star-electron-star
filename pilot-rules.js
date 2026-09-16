@@ -26,7 +26,7 @@ function plan(sentence, ctx) {
   }
 
   if (/(entangle|\btwin|coupl)/.test(t)) out.push('entangle');
-  const key = num(/(?:read|block|key|fly to|go to|twin|qubit|measure)\s+(\d{1,7})\b/) ?? (/(voltage|amp|metre|meter|ohm|houses|kw|kva)/.test(t) ? null : num(/\b(\d{2,7})\b/));
+  const key = num(/(?:read|block|key|fly to|go to|twin|state|qubit|measure)\s+(\d{1,7})\b/) ?? (/(voltage|amp|metre|meter|ohm|houses|kw|kva)/.test(t) ? null : num(/\b(\d{2,7})\b/));
   if (/(\bread\b|show me the code|the real line)/.test(t) && key != null) out.push(`read ${key}`);
   else if (/(fly to|go to|\bblock\b|\bkey\b)/.test(t) && key != null) out.push(`block ${key}`);
   if (/\b(seed|grow)\b/.test(t)) out.push(`seed ${sentence.replace(/^.*?\b(seed|grow)\b\s*/i, '') || sentence}`);

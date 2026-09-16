@@ -4,7 +4,7 @@
 
 ## The two twins
 
-1. **The key.** A permanent integer, given once, in the order the line entered the estate. Never reused, never renumbered. It is the primary identity of both twins. Today: 1 to 342,795; 250,174 in use; 128,369 carried by a function family.
+1. **The key.** A permanent integer, given once, in the order the line entered the estate. Never reused, never renumbered. It is the primary identity of both twins. Today: 1 to 342,795; 250,174 in use; 128,369 carried by a function family; 1,736 twin places across 35 repositories.
 2. **The code.** The real line the key stands for: `repo, commit, path, line`. It exists in git. It can be read (`read <key>`), opened (the twin link), hashed (`sha1` of the stripped text).
 
 A key without code is dust. Code without a key is not on the wafer. The pair is the star.
