@@ -53,3 +53,7 @@ Above 100 kW, every calculation card states that a chartered electrical engineer
 `pipeline/` — the scripts that produced the data; each one fails rather than writing a wrong file. `QUANTUM-STAR-PROTOCOL.md` — the rules this page follows.
 
 Data is read from globalgrid2050.com/testcode/202609142202/data/, built 2026-09-14 19:56 UTC.
+
+## For teachers
+
+Free to use, for learners of any age, one to one hundred and twenty. The wafer shows real code, real physics and real grid data; every figure traces to a script that can fail and to a line at a commit. No account, no cost, no tracking. Attribution: Ventus Ltd, GlobalGrid2050.

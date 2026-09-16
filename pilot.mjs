@@ -5,7 +5,7 @@
 // It runs in two modes: on the website (static files, engine imported live from ventus-grid-engine's published modules)
 // and in CPU WORLD (a local server adds read-from-git and the runner swarm). No model, no colour beyond the wafer's own.
 const $ = id => document.getElementById(id);
-const here = new URL('.', location.href).href;
+const here = (() => { const m = document.querySelector('meta[name="wafer-data"]'); return m ? new URL(m.content, location.href).href : new URL('.', location.href).href; })();
 const ENGINE_WEB = 'https://ventusltd.github.io/ventus-grid-engine/engine/';
 let labels = null, apps = null, keysDb = null, qubit = null, entangle = null, serverMode = false; const born = { count: 0, seed: '2026-09-14' };
 const DIES = ['sld-sandbox', 'substation-intelligence', 'place-global-search', 'streaming-parquet-bridge'];
@@ -37,7 +37,9 @@ const css = document.createElement('style'); css.textContent = `
 #eg select{font:12px ui-monospace,Menlo,Consolas,monospace;background:#11151f;color:#cfe3f2;border:1px solid #1b2030;border-radius:6px;padding:.45rem .7rem}
 #plog{position:fixed;left:12px;bottom:58px;max-height:30vh;overflow:hidden;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#8b93a7;white-space:pre;pointer-events:none;z-index:19}
 #beam{bottom:58px !important}
-#earth{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;background:#0b0e15}
+#core button{pointer-events:auto;min-height:44px;min-width:44px;padding:.55rem .9rem;font:13px/1.2 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;background:#0e121bf2;color:#cfe3f2;border:1px solid #5ec8f2;border-radius:8px;cursor:pointer;touch-action:manipulation}
+#core button:hover,#core button:focus-visible{background:#11151f;border-color:#f2b05e;outline:none} #core button small{display:block;color:#8b93a7;font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+@media (max-width:640px){#earth{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;background:#0b0e15}
 #earth.open{display:flex}
 #earthbar{display:flex;align-items:center;gap:10px;padding:6px 12px;background:#11151f;border-bottom:1px solid #1b2030;font:12px ui-monospace,Menlo,Consolas,monospace;color:#cfe3f2}
 #earthbar b{color:#f2b05e;letter-spacing:.08em} #earthbar span{flex:1;color:#8b93a7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -165,6 +167,14 @@ cmds.space = function(){ $('earth').classList.remove('open'); $('earthframe').sr
 $('earthback').onclick = () => cmds.space();
 window.__earth = () => ({ open: $('earth').classList.contains('open'), name: $('earthname').textContent, src: $('earthframe').src });
 
+
+// the particles do the work: when the wafer's own panel opens for a line, add one plain link to the app that line belongs to
+const APP_OF_REPO = { gridatlas: 'gridatlas', pipelinenews: 'pipelinenews', globalgrid2050: 'globalgrid2050', 'ventus-grid-engine': 'spider sandbox', elements: 'periodic table', 'grid-dictionary': 'grid-dictionary', spiders: 'spiders', 'star-solar-star': 'star-solar-star', 'code-generator': 'code-generator', testcode: 'testcode', 'galaxies-wafers': 'galaxies-wafers', stars: 'stars' };
+const panelLink = () => { const body = $('panelbody'); if (!body || body.querySelector('.landlink')) return; const m = (body.innerText || '').match(/Line\s+([\d,]+)/); if (!m) return; const key = +m[1].replace(/,/g, ''); const t = twinOf(key); if (!t) return;
+  const repo = t.repo.split('/')[1]; const app = APP_OF_REPO[repo]; if (!app) return; const url = EARTH[app] || `https://ventusltd.github.io/${repo}/`;
+  body.insertAdjacentHTML('beforeend', `<p class="landlink" style="margin:.6rem 0 0"><a href="${url}" style="color:#5ec8f2">land on ${app} — this line's app</a> <span style="color:#8b93a7">· or type: land ${app}</span></p>`);
+  body.querySelector('.landlink a').addEventListener('click', e => { e.preventDefault(); run('land ' + app); }); };
+new MutationObserver(panelLink).observe($('panelbody'), { childList: true, subtree: true });
 window.__pilot = run;
 (async () => {
   serverMode = await fetch('/gpu', { cache: 'no-store' }).then(r => r.ok).catch(() => false);
@@ -173,4 +183,5 @@ window.__pilot = run;
   [keysDb, qubit, apps, entangle, labels] = await Promise.all([j('keys.json'), j('qubit.json'), j('apps.json'), j('entangle.json'), j('labels.json')]);
   log(`Quantum Twin — primary key to actual code. ${keysDb ? keysDb.count.toLocaleString() : '?'} blocks with a recorded line; ${qubit ? Object.keys(qubit.atoms).length.toLocaleString() : '?'} block families.`);
   log('Type a sentence or a command. Every answer shows the command it became. Try: block 39885');
+  const start = document.querySelector('meta[name="wafer-start"]')?.content; if (start) { await new Promise(r => setTimeout(r, 1500)); run(start); }
 })();
