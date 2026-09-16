@@ -19,7 +19,7 @@ const T = [ // [what a user types, what must appear (regex) in the card or the l
   ['diversified demand for 900 houses at 3 kw each coincidence 0.4', /1080/], ['show me gridatlas', /app gridatlas/], ['fly to 39885', /beam is on line 39885/],
   ['read 39885', /line 3672/], ["twin 2", /cable-trench-or-drill/], ['state 2', /HOME P = /], ['measure 2', /result:/], ['block 999999999', /block 999999999/],
   ['state 999999999', /no family record/], ['purple monkey dishwasher', /no command matched/], ['reset', /reset/], ['block 1217', /beam is on line 1217/], ["twin 1217", /line [0-9]+/],
-  ['apps', /rule/], ['app testcode', /app testcode/], ['app elements', /app elements/], ['app stars', /app stars/], ['app cvaa', /no app|app cvaa/],
+  ['apps', /working index/], ['app testcode', /app testcode/], ['app elements', /app elements/], ['app stars', /app stars/], ['app cvaa', /no app|app cvaa/],
   ['state 39885', /K 1 same directory/], ['measure 39885 alpha', /seed "alpha"/], ['measure 39885', /Draw/], ['connect 2 39885', /connect 2 → 39885/], ['help', /block/],
   ['run voltage-drop.voltageDropVolts {"currentA":-5,"lengthM":250,"resistanceOhmPerKm":0.32,"powerFactor":0.9}', /refused/], ['run voltage-drop.dropPercent {"dropVolts":15.796,"nominalVolts":400}', /3\.9/],
   ['show me the versions', /no command matched|versions/], ['block 39885', /beam/], ['reset', /reset/],

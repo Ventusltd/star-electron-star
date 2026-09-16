@@ -19,7 +19,7 @@ jobs:
       ARG: ${{ inputs.arg }}
     steps:
       - name: Console is up
-        shell: powershell
+        shell: 'powershell -NoProfile -ExecutionPolicy Bypass -File {0}'
         run: |
           $ErrorActionPreference = "Stop"
           $g = Invoke-RestMethod http://127.0.0.1:8791/gpu
@@ -27,12 +27,12 @@ jobs:
           $g | ConvertTo-Json -Compress
       - name: Ollama is up
         if: env.STEP == 'review'
-        shell: powershell
+        shell: 'powershell -NoProfile -ExecutionPolicy Bypass -File {0}'
         run: |
           $ErrorActionPreference = "Stop"
           (Invoke-RestMethod http://127.0.0.1:11434/api/tags).models.name
       - name: Run step
-        shell: powershell
+        shell: 'powershell -NoProfile -ExecutionPolicy Bypass -File {0}'
         working-directory: ${{ env.CPU_WORLD }}
         run: |
           $ErrorActionPreference = "Stop"
