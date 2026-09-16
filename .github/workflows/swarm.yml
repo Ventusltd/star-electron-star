@@ -1,4 +1,4 @@
-# SWARM — drive the MSI runners hard, within limits. Forty lanes, twenty at once, each: GPU temperature guard,
+# SWARM — drive the MSI runners hard, within limits. Forty lanes, all at once, each: GPU temperature guard,
 # the sixty machine checks, the key-to-code check. Runs on every push to main and on demand.
 # Only self-hosted runners labelled msi + gpu take these jobs; nothing here runs on GitHub's machines.
 name: swarm
@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 25
     strategy:
       fail-fast: false
-      max-parallel: 20
+      max-parallel: 40
       matrix:
         lane: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
     env:
@@ -46,7 +46,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Key-to-code check (every recorded line fetched from its commit)
-        if: matrix.lane <= 8
+        if: matrix.lane <= 16
         shell: 'powershell -NoProfile -ExecutionPolicy Bypass -File {0}'
         working-directory: ${{ env.CPU_WORLD }}
         run: |
