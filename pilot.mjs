@@ -165,6 +165,55 @@ cmds.land = function(name){ name = (name || '').toLowerCase().trim(); const key 
 cmds.visit = cmds.land; cmds.go = cmds.land; cmds.open = cmds.land;
 cmds.space = function(){ $('earth').classList.remove('open'); $('earthframe').src = 'about:blank'; log('back in space: the wafer'); };
 $('earthback').onclick = () => cmds.space();
+document.body.insertAdjacentHTML('beforeend', '<div id="hud" style="position:fixed;right:12px;top:44px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#8b93a7;pointer-events:none;z-index:19"></div>');
+const W = () => window.__wafer; const fmtN = n => n.toLocaleString('en-GB');
+const hud = s => { const st = W() && W().state(); if (!st) return; $('hud').textContent = `showing ${fmtN(st.scopeN)} of ${fmtN(st.n)} lines${s ? ' · ' + s : ''}`; };
+let scopeName = 'all';
+const repoOf = name => { if (!apps) return null; const a = apps.apps.find(x => x.name === name) || apps.apps.find(x => x.name.includes(name)); return a ? a.repo : null; };
+// a scope is a set with a rule: all · an app (apps.json keys per repo) · module <path> · gate <family#> · line <key>
+function scopeKeys(spec){ const s = (spec || 'all').trim(); const [kind, ...r] = s.split(/\s+/); const arg = r.join(' ');
+  if (!s || s === 'all' || s === 'estate') return { name: 'all', keys: null };
+  if (kind === 'line' || kind === 'key') { const k = parseInt(arg, 10); return Number.isFinite(k) ? { name: `line ${k}`, keys: [k] } : null; }
+  if (kind === 'gate' || kind === 'family') { if (!keysDb) return null; const fid = parseInt(arg, 10); const ks = []; for (let i = 0; i < keysDb.keys.length; i++) if (keysDb.family[i] === fid) ks.push(keysDb.keys[i]); return ks.length ? { name: `gate ${fid}`, keys: ks } : null; }
+  if (kind === 'module' || kind === 'file' || kind === 'die') { if (!keysDb) return null; const ks = []; for (let i = 0; i < keysDb.keys.length; i++) if (keysDb.places[keysDb.place[i]][2].includes(arg)) ks.push(keysDb.keys[i]); return ks.length ? { name: `module ${arg}`, keys: ks } : null; }
+  const repo = repoOf(s.toLowerCase()); const ks = repo && apps.keys ? apps.keys[repo] : null; return ks ? { name: repo.split('/').pop(), keys: ks } : null; }
+const scopeFail = spec => { log(`scope ${spec}: not a scope — try all, an app name (apps), module <path>, gate <family#>, line <key>`); };
+cmds.scope = function(spec){ if (!W()) return log('the wafer is not ready'); const sc = scopeKeys(spec); if (!sc) return scopeFail(spec); const r = W().scope(sc.keys); scopeName = sc.name; hud(sc.name);
+  log(`scope ${sc.name}: showing ${fmtN(r.shown)} of ${fmtN(r.of)} lines${r.missing ? ` · ${fmtN(r.missing)} keys not numbered here` : ''}`); return r; };
+cmds.gravity = async function(spec){ if (!W()) return log('the wafer is not ready'); const sc = scopeKeys(spec); if (!sc) return scopeFail(spec); scopeName = sc.name; const k = W().kepler();
+  log(`gravity ${sc.name}: Kepler r(θ) = p/(1 + e·cos θ), e = ${k.e}, p = ${k.p.toFixed(1)}, the wafer's centre at the focus, points in key order`); const r = await W().gravity(sc.keys); hud(sc.name + ' · kepler'); log(`gravity ${sc.name}: ${fmtN(r.shown)} lines in orbit${r.missing ? ` · ${fmtN(r.missing)} keys not numbered here` : ''}`); return r; };
+cmds.orbit = cmds.gravity; cmds.isolate = cmds.gravity;
+cmds.release = async function(){ if (!W()) return log('the wafer is not ready'); const r = await W().release(); scopeName = 'all'; hud(); log(`release: showing ${fmtN(r.shown)} of ${fmtN(r.of)} lines, back on the wafer law`); return r; };
+// LOGO: the same dust, the same blend; the target is the wordmark rasterised once, deterministically, off screen (sampled only, never shown)
+const LOGO = { lines: ['VENTUS — CABLES AND CONNECTIVITY', 'GLOBALGRID2050'], font: 'bold 120px ui-monospace', step: 2, lineGap: 150, fill: 1.6 };
+let logoRaster = null;
+function rasterLogo(){ if (logoRaster) return logoRaster; const c = document.createElement('canvas'); const g = c.getContext('2d'); g.font = LOGO.font;
+  const w = Math.ceil(Math.max(...LOGO.lines.map(t => g.measureText(t).width))) + 40, h = LOGO.lineGap * LOGO.lines.length + 40; c.width = w; c.height = h; g.font = LOGO.font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+  LOGO.lines.forEach((t, i) => g.fillText(t, w / 2, 20 + LOGO.lineGap * (i + 0.5))); const px = g.getImageData(0, 0, w, h).data; const on = new Uint8Array(w * h); const samples = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (px[(y * w + x) * 4 + 3] > 127) { on[y * w + x] = 1; if (x % LOGO.step === 0 && y % LOGO.step === 0) samples.push(x, y); } }
+  const st = W().state(); const s = LOGO.fill * Math.sqrt(st.max) / w; /* wafer units per canvas px: the text spans 1.6·R inside the wafer */
+  const G = W().kepler().coreOut; /* the two lines part around the core: line 1 lifted by 0.10·R, line 2 lowered by it; the pupil stays empty */
+  const toWafer = (x, y) => [(x - w / 2) * s, (h / 2 - y) * s + (y < h / 2 ? G : -G)]; const toCanvas = (X, Y) => [X / s + w / 2, h / 2 - (Y > 0 ? Y - G : Y + G) / s];
+  return (logoRaster = { w, h, on, samples, n: samples.length / 2, s, toWafer, toCanvas }); }
+function logoTargets(m){ const L = rasterLogo(); const t = new Float32Array(m * 2); const S = L.n;
+  for (let j = 0; j < m; j++) { let q, dx = 0, dy = 0; if (m <= S) q = Math.floor(j * S / m); else { q = j % S; const c = Math.floor(j / S); dx = ((c * 7) % LOGO.step) / LOGO.step - 0.5; dy = ((c * 3) % LOGO.step) / LOGO.step - 0.5; } /* cycle with a tiny deterministic offset */
+    const [X, Y] = L.toWafer(L.samples[2 * q] + dx, L.samples[2 * q + 1] + dy); t[2 * j] = X; t[2 * j + 1] = Y; } return t; }
+cmds.logo = async function(spec){ if (!W()) return log('the wafer is not ready'); const sc = scopeKeys(spec || scopeName); if (!sc) return scopeFail(spec); const r = W().scope(sc.keys); scopeName = sc.name; const L = rasterLogo();
+  log(`logo ${sc.name}: ${fmtN(r.shown)} lines → "${LOGO.lines.join(' / ')}" (${fmtN(L.n)} glyph samples, ${LOGO.font}, grid ${LOGO.step} px)`); await W().blend(logoTargets(r.shown)); hud(sc.name + ' · logo'); log(`logo ${sc.name}: assembled`); return r; };
+cmds.wordmark = cmds.logo;
+// test instrument: share of in-scope points within tolPx (screen px) of a glyph pixel
+window.__logoCheck = (tolPx = 3) => { const L = rasterLogo(); const st = W().state(); const rad = Math.max(1, Math.ceil(tolPx / (st.view.zoom * L.s))); const P = W().positions(); let hit = 0;
+  for (const [, X, Y] of P) { const [cx, cy] = L.toCanvas(X, Y); let ok = false; for (let y = Math.round(cy) - rad; y <= Math.round(cy) + rad && !ok; y++) for (let x = Math.round(cx) - rad; x <= Math.round(cx) + rad; x++) if (x >= 0 && y >= 0 && x < L.w && y < L.h && L.on[y * L.w + x]) { ok = true; break; } if (ok) hit++; }
+  return { n: P.length, hit, share: P.length ? hit / P.length : 0, radiusCanvasPx: rad, samples: L.n }; };
+window.__scopeKeys = spec => { const sc = scopeKeys(spec); return sc ? { name: sc.name, count: sc.keys ? sc.keys.length : null } : null; };
+setTimeout(() => hud(), 1500);
+
+// an app is a scope with gravity: app <name> and land <name> pull that app's lines in under Kepler; space releases them to the wafer law
+{ const _app = cmds.app, _land = cmds.land, _space = cmds.space;
+  cmds.app = async function(name){ const r = _app.call(cmds, name); if (W() && name && scopeKeys(name)) await cmds.gravity(name); return r; };
+  cmds.land = async function(name){ if (W() && name && scopeKeys(name)) await cmds.gravity(name); return _land.call(cmds, name); };
+  cmds.space = function(){ const r = _space.call(cmds); if (W()) cmds.release(); return r; }; }
+
 window.__earth = () => ({ open: $('earth').classList.contains('open'), name: $('earthname').textContent, src: $('earthframe').src });
 
 
@@ -177,7 +226,7 @@ const panelLink = () => { const body = $('panelbody'); if (!body || body.querySe
 new MutationObserver(panelLink).observe($('panelbody'), { childList: true, subtree: true });
 window.__pilot = run;
 (async () => {
-  serverMode = await fetch('/gpu', { cache: 'no-store' }).then(r => r.ok).catch(() => false);
+  serverMode = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && await fetch('/gpu', { cache: 'no-store' }).then(r => r.ok).catch(() => false);
   if (serverMode) (async function poll(){ try { const { lines: L } = await (await fetch('/pilot/next')).json(); for (const l of L) { log(`[powershell] ${l}`); await run(l); } } catch {} setTimeout(poll, 500); })();
   const j = async f => fetch(here + f).then(r => r.ok ? r.json() : null).catch(() => null);
   [keysDb, qubit, apps, entangle, labels] = await Promise.all([j('keys.json'), j('qubit.json'), j('apps.json'), j('entangle.json'), j('labels.json')]);

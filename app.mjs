@@ -43,7 +43,7 @@
  */
 
 import { place, placeAll, parseKey, indexOfKey as findKey, ownersOf, fanoutCount,
-         connectAnswer, esc, fmt, SPACING } from './lib.mjs';
+         connectAnswer, esc, fmt, SPACING, GOLDEN } from './lib.mjs';
 import { buildPickIndex, nearestAt } from './pick.mjs';
 import { openLineStore } from './read.mjs';
 
@@ -89,6 +89,11 @@ async function tier1() {
   ]);
   U.meta = meta; U.keys = keys; U.lens = lens; U.inFam = inFam; U.n = keys.length;
   U.pos = placeAll(keys);
+  U.posB = new Float32Array(U.pos);           /* what is drawn: the law, or gravity's blend of it */
+  clearPupil(U.posB);                         /* the centre is the visitor's pupil: nothing inside r_s, in any mode */
+  U.home = new Float32Array(U.posB);          /* the time law with the pupil held: what release returns to */
+  U.scope = new Uint32Array(U.n); for (let i = 0; i < U.n; i++) U.scope[i] = i;
+  U.scopeN = U.n;                              /* every point is drawn, always; partition() sets the sets */
   U.pick = buildPickIndex(U.pos, U.n, SPACING);
 
   let carried = 0;
@@ -143,7 +148,8 @@ void main(){
   o = vec4(c, edge * (0.30 + 0.70 * v_fam));
 }`;
 
-let gl = null, prog = null, loc = {}, vao = null, ctx2d = null;
+let gl = null, prog = null, loc = {}, vao = null, ctx2d = null, posBuf = null, scopeBuf = null;
+let drawnLast = 0;                            /* the count handed to the last draw call */
 
 function compile(g, type, src) {
   const s = g.createShader(type); g.shaderSource(s, src); g.compileShader(s);
@@ -185,17 +191,24 @@ function buildGL() {
   for (const u of ['u_res', 'u_cam', 'u_zoom', 'u_dpr', 'u_focusKey']) loc[u] = gl.getUniformLocation(prog, u);
 
   vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-  const put = (data, name, size, Kind, norm) => {
+  const put = (data, name, size, Kind, norm, usage) => {
     const b = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, b);
-    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, data, usage ?? gl.STATIC_DRAW);
     const l = gl.getAttribLocation(prog, name);
     gl.enableVertexAttribArray(l);
     gl.vertexAttribPointer(l, size, Kind, !!norm, 0, 0);
+    return b;
   };
-  put(U.pos, 'a_pos', 2, gl.FLOAT, false);
+  posBuf = put(U.pos, 'a_pos', 2, gl.FLOAT, false, gl.DYNAMIC_DRAW);
   put(U.lens, 'a_len', 1, gl.UNSIGNED_SHORT, false);
   put(U.inFam, 'a_fam', 1, gl.UNSIGNED_BYTE, false);
+  /* SCOPE. The element index lives in the VAO: the points drawn are exactly the
+     indices in U.scope, in key order. Nothing per point changes; only how many
+     are drawn. The whole estate is 0..U.n-1. */
+  scopeBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, scopeBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, U.scope, gl.DYNAMIC_DRAW);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   return true;
@@ -230,7 +243,7 @@ function drawMarks() {
   ];
   if (view.link) {
     const [ka, kb] = view.link;
-    const A = toScreen(placeOne(ka)), B = toScreen(placeOne(kb));
+    const A = toScreen(posOf(ka)), B = toScreen(posOf(kb));
     c.strokeStyle = '#ff2bd6'; c.lineWidth = 1.6; c.setLineDash([5, 4]);
     c.beginPath(); c.moveTo(A[0], A[1]);
     c.quadraticCurveTo((A[0] + B[0]) / 2, (A[1] + B[1]) / 2 - 40, B[0], B[1]);
@@ -240,7 +253,7 @@ function drawMarks() {
     }
   }
   if (view.focus >= 0) {
-    const P = toScreen(placeOne(view.focus));
+    const P = toScreen(posOf(view.focus));
     c.strokeStyle = '#ffd54a'; c.lineWidth = 1.4;
     c.beginPath(); c.arc(P[0], P[1], 11, 0, 6.2832); c.stroke();
     c.beginPath(); c.moveTo(P[0] - 18, P[1]); c.lineTo(P[0] - 13, P[1]);
@@ -260,16 +273,19 @@ function render() {
     gl.uniform1f(loc.u_zoom, view.zoom * view.dpr);
     gl.uniform1f(loc.u_dpr, view.dpr);
     gl.uniform1f(loc.u_focusKey, view.focus);
-    gl.drawArrays(gl.POINTS, 0, U.n);
+    drawnLast = U.scopeN;
+    gl.drawElements(gl.POINTS, U.scopeN, gl.UNSIGNED_INT, 0);
   } else if (ctx2d) {
     const c = ctx2d;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.fillStyle = '#0b0d12'; c.fillRect(0, 0, stage.width, stage.height);
     c.fillStyle = '#7d8598';
     const step = view.zoom < 0.5 ? 7 : 1;
-    for (let i = 0; i < U.n; i += step) {
-      const x = (U.pos[i * 2] - view.x) * view.zoom * view.dpr + stage.width / 2;
-      const y = stage.height / 2 - (U.pos[i * 2 + 1] - view.y) * view.zoom * view.dpr;
+    drawnLast = Math.ceil(U.scopeN / step);
+    for (let s = 0; s < U.scopeN; s += step) {
+      const i = U.scope[s];
+      const x = (U.posB[i * 2] - view.x) * view.zoom * view.dpr + stage.width / 2;
+      const y = stage.height / 2 - (U.posB[i * 2 + 1] - view.y) * view.zoom * view.dpr;
       if (x < 0 || y < 0 || x > stage.width || y > stage.height) continue;
       c.fillRect(x, y, view.dpr, view.dpr);
     }
@@ -303,6 +319,150 @@ function flyTo(key, zoom) {
     if (u < 1) requestAnimationFrame(step);
   })(t0);
 }
+
+/* ── scope and gravity ───────────────────────────────────────────────────────
+   Two things only may vary: how many particles are shown (the lines in scope)
+   and where a physical law puts them. Nothing per point changes: not size, not
+   brightness, not colour. Out of scope is simply not drawn, never dimmed.
+   Positions are never stored: the law is replayed from the keys. */
+
+/* Three sets, decided by the scope (Vikram, 17 Sept 2026):
+   RIM   the outermost shell, the 2 % of keys with the largest r under the time law,
+         fixed at their time-law positions in every mode: the edge of the universe.
+   SCOPE the lines in scope (an app, a module, a gate, a line, or all), in key order:
+         these go where the law says (the time law, a Kepler orbit, the wordmark).
+   CORE  everything else: pulled inward to a compact core of radius 0.10·R by key
+         order, so the centre is never empty. Nothing is hidden: the count is always U.n. */
+const RIM_SHARE = 0.02, CORE_R = 0.10, PUPIL = 0.02;   /* r_s = 0.02·R: the pupil; core annulus r ∈ [3·r_s, 0.10·R] */
+U.part = null;                                 /* Uint8Array: 0 core, 1 scope, 2 rim */
+const waferR = () => SPACING * Math.sqrt(U.meta.max);
+/* The pupil: the few keys whose time-law radius √k is inside r_s are held at the annulus's
+   inner edge 3·r_s, at their own angle k·GOLDEN. Deterministic, key-based, never stored. */
+function clearPupil(buf) {
+  const rs = PUPIL * waferR();
+  let moved = 0;
+  for (let i = 0; i < U.n; i++) {
+    const x = buf[2 * i], y = buf[2 * i + 1];
+    if (Math.hypot(x, y) < rs) { const th = U.keys[i] * GOLDEN; buf[2 * i] = 3 * rs * Math.cos(th); buf[2 * i + 1] = 3 * rs * Math.sin(th); moved++; }
+  }
+  return moved;
+}
+function rimStart() { return U.n - Math.ceil(RIM_SHARE * U.n); }
+
+/* Scope: keys → membership, in key order. Keys that are not numbered lines are counted
+   as missing and reported, never silently dropped. U.scope lists the in-scope indices. */
+function partition(keys) {
+  const part = new Uint8Array(U.n), r0 = rimStart();
+  let missing = 0;
+  if (keys == null) part.fill(1);
+  else for (const k0 of keys) { const k = Number(k0); const i = Number.isFinite(k) ? indexOfKey(k) : -1; if (i < 0) missing++; else part[i] = 1; }
+  for (let i = r0; i < U.n; i++) part[i] = 2;
+  const out = [];
+  for (let i = 0; i < U.n; i++) if (part[i] === 1) out.push(i);
+  U.part = part; U.scope = Uint32Array.from(out); U.scopeN = U.scope.length;
+  U.coreN = U.n - U.scopeN - (U.n - r0); U.rimN = U.n - r0;
+  return { shown: U.n, scope: U.scopeN, core: U.coreN, rim: U.rimN, of: U.n, missing };
+}
+
+/* Full targets for every point: scope → the law's targets (2·scopeN, scope order);
+   core → the accretion disc, an annulus r ∈ [3·r_s, 0.10·R] filled uniformly by area,
+   r = √(r_in² + (r_out² − r_in²)·(j+½)/m), θ = j·GOLDEN, in key order; rim → the time law (held). */
+function fullTargets(scopeTargets) {
+  const t = new Float32Array(U.n * 2), R = waferR(), m = Math.max(1, U.coreN);
+  const rIn = 3 * PUPIL * R, rOut = CORE_R * R, a = rIn * rIn, b = rOut * rOut - rIn * rIn;
+  let j = 0, c = 0;
+  for (let i = 0; i < U.n; i++) {
+    const p = U.part[i];
+    if (p === 1) { t[2 * i] = scopeTargets[2 * j]; t[2 * i + 1] = scopeTargets[2 * j + 1]; j++; }
+    else if (p === 2) { t[2 * i] = U.home[2 * i]; t[2 * i + 1] = U.home[2 * i + 1]; }
+    else { const r = Math.sqrt(a + b * (c + 0.5) / m), th = c * GOLDEN; t[2 * i] = r * Math.cos(th); t[2 * i + 1] = r * Math.sin(th); c++; }
+  }
+  clearPupil(t);                               /* no law may enter the pupil */
+  return t;
+}
+function lawTargets() { const m = U.scopeN, t = new Float32Array(m * 2); for (let j = 0; j < m; j++) { const i = U.scope[j]; t[2 * j] = U.home[2 * i]; t[2 * j + 1] = U.home[2 * i + 1]; } return t; }
+
+/* The blend, copied from flyTo: for every point i, drawn = from + (target − from)·ease(u)
+   over MOVE_MS, uploaded into the same position buffer each frame.
+   Deterministic: the end state is a pure function of the scope and the law's parameters. */
+const MOVE_MS = 2000;
+let moving = 0;
+function uploadPos() {
+  if (!gl) return;
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, U.posB);
+}
+function blendTo(targets, done) {
+  /* targets: Float32Array of 2·U.n, one (x, y) per point */
+  const from = new Float32Array(U.posB), N2 = U.n * 2;
+  const token = ++moving;
+  const t0 = performance.now();
+  (function step(t) {
+    if (token !== moving) return;
+    const u = Math.min(1, (t - t0) / MOVE_MS);
+    const e = u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+    if (u >= 1) U.posB.set(targets);
+    else for (let q = 0; q < N2; q++) U.posB[q] = from[q] + (targets[q] - from[q]) * e;
+    uploadPos(); render();
+    if (u < 1) requestAnimationFrame(step);
+    else { U.pick = buildPickIndex(U.posB, U.n, SPACING); done?.(); }
+  })(t0);
+}
+
+/* Kepler: r(θ) = p / (1 + e·cos θ), the wafer's centre at the focus, e = 0.3,
+   p = 0.5·SPACING·√max so the orbit (r from p/1.3 to p/0.7) sits inside the wafer.
+   Point j of the scope, in key order, sits at θ_j = j·GOLDEN. */
+const KEPLER = { e: 0.3 };
+function keplerTargets() {
+  const m = U.scopeN, p = 0.5 * SPACING * Math.sqrt(U.meta.max), e = KEPLER.e;
+  const t = new Float32Array(m * 2);
+  for (let j = 0; j < m; j++) {
+    const th = j * GOLDEN, r = p / (1 + e * Math.cos(th));
+    t[2 * j] = r * Math.cos(th); t[2 * j + 1] = r * Math.sin(th);
+  }
+  return t;
+}
+/* scope: the in-scope lines stay on the time law; the rest are pulled to the core; the rim stays. */
+function setScope(keys) { const s = partition(keys); return new Promise(res => blendTo(fullTargets(lawTargets()), () => res(s))); }
+/* gravity: scope, and the in-scope lines go into orbit. */
+function gravity(keys) { const s = partition(keys); return new Promise(res => blendTo(fullTargets(keplerTargets()), () => res(s))); }
+/* any law the pilot computes for the in-scope points (2·scopeN, scope order): same core, same rim. */
+function blendScope(scopeTargets) { return new Promise(res => blendTo(fullTargets(scopeTargets), res)); }
+/* Release: every point back to the wafer law exactly; everything in scope. */
+function release() {
+  const s = partition(null);
+  return new Promise(res => blendTo(U.home, () => { U.posB.set(U.home); uploadPos(); U.pick = buildPickIndex(U.home, U.n, SPACING); render(); res(s); }));
+}
+/* Where a key is drawn right now (the law, unless gravity moved it). */
+function posOf(key) {
+  const i = indexOfKey(key);
+  return i < 0 ? placeOne(key) : [U.posB[2 * i], U.posB[2 * i + 1]];
+}
+/* Read back a region of the frame in the same frame it is drawn, as a colour histogram.
+   A test instrument only: the frame is rendered exactly as it always is. */
+function pixels(x, y, w, h) {
+  if (!gl) return null;
+  render();
+  const buf = new Uint8Array(w * h * 4);
+  gl.readPixels(x, stage.height - y - h, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  const hist = {};
+  for (let i = 0; i < buf.length; i += 4) { const c = buf[i] + ',' + buf[i + 1] + ',' + buf[i + 2]; hist[c] = (hist[c] || 0) + 1; }
+  return hist;
+}
+window.__wafer = {
+  scope: setScope, gravity, release, blend: blendScope,
+  kepler: () => ({ e: KEPLER.e, p: 0.5 * waferR(), R: waferR(), rs: PUPIL * waferR(), coreIn: 3 * PUPIL * waferR(), coreOut: CORE_R * waferR(), rimShare: RIM_SHARE }),
+  state: () => ({ n: U.n, scopeN: U.scopeN, coreN: U.coreN ?? 0, rimN: U.rimN ?? 0, rimStartKey: U.keys[rimStart()], drawn: drawnLast, max: U.meta?.max ?? 0, moving,
+                  view: { x: view.x, y: view.y, zoom: view.zoom, w: view.w, h: view.h, dpr: view.dpr },
+                  scopeUnique: new Set(U.scope).size, scopeMax: U.scopeN ? U.scope.reduce((a, b) => Math.max(a, b), 0) : -1 }),
+  positions: () => { const m = U.scopeN, o = new Array(m); for (let j = 0; j < m; j++) { const i = U.scope[j]; o[j] = [U.keys[i], U.posB[2 * i], U.posB[2 * i + 1]]; } return o; },
+  law: () => { const m = U.scopeN, o = new Array(m); for (let j = 0; j < m; j++) { const i = U.scope[j]; o[j] = [U.keys[i], U.home[2 * i], U.home[2 * i + 1]]; } return o; },
+  all: () => { const o = new Array(U.n); for (let i = 0; i < U.n; i++) o[i] = [U.keys[i], U.posB[2 * i], U.posB[2 * i + 1], U.part ? U.part[i] : 1]; return o; },
+  lawDiff: () => { let d = 0; for (let i = 0; i < U.n; i++) if (U.posB[2 * i] !== U.home[2 * i] || U.posB[2 * i + 1] !== U.home[2 * i + 1]) d++; return d; },
+  radii: () => { const o = { scope: [Infinity, 0], core: [Infinity, 0], rim: [Infinity, 0], pupil: 0 }; const rs = PUPIL * waferR();
+    for (let i = 0; i < U.n; i++) { const r = Math.hypot(U.posB[2 * i], U.posB[2 * i + 1]); if (r < rs) o.pupil++; const k = ['core', 'scope', 'rim'][U.part ? U.part[i] : 1]; if (r < o[k][0]) o[k][0] = r; if (r > o[k][1]) o[k][1] = r; } return o; },
+  pixels
+};
 
 /* The line under the finger. Until iteration 49 this compared the tap with
    every point in the estate: 250,174 distance tests per tap then, 283,231 by
